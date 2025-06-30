@@ -9,3 +9,4 @@ livekit-plugins-turn-detector~=1.0
 livekit-plugins-noise-cancellation>=0.2.0,<1.0.0
 python-dotenv~=1.0
 torch>=2.0.0  # Required for turn-detector
+livekit-plugins-google>=0.1.0

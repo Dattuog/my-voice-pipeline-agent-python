@@ -29,6 +29,7 @@ from livekit.plugins import (
     noise_cancellation,
     silero,
 )
+from livekit.plugins.google import LLM as GoogleLLM
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import os
