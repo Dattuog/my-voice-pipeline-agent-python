@@ -55,6 +55,12 @@ class Assistant(Agent):
                 api_key=gemini_api_key,
             ),
             tts=cartesia.TTS(),
+            tts=cartesia.TTS(
+
+                voice={"mode": "id", "id": "91b4cf29-5166-44eb-8054-30d40ecc8081"} 
+
+            ),
+ 
             turn_detection=MultilingualModel(),
         )
 
