@@ -70,9 +70,9 @@ class Assistant(Agent):
 
         cartesia_api_key = os.environ.get("CARTESIA_API_KEY")
  
-        # Configure Cartesia TTS
+        # Configure Cartesia TTS with the current API
 
-        cartesia_config = cartesia.CartesiaTTSConfig(
+        cartesia_tts = cartesia.TTS(
 
             api_key=cartesia_api_key,
 
@@ -93,8 +93,6 @@ class Assistant(Agent):
             )
 
         )
- 
-        cartesia_tts = cartesia.TTS(config=cartesia_config)
  
         super().__init__(
 
