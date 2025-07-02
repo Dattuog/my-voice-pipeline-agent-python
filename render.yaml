@@ -5,17 +5,7 @@ services:
     runtime: python3
     buildCommand: |
       pip install --upgrade pip &&
-      pip install -r requirements.txt &&
-      mkdir -p model_cache/huggingface &&
-      python -c "
-      import sys
-      try:
-          from livekit.agents import cli
-          print('LiveKit agents installed successfully')
-      except Exception as e:
-          print(f'Error importing LiveKit: {e}')
-          sys.exit(1)
-      "
+      pip install -r requirements.txt
     startCommand: python agent.py
     plan: starter
     healthCheckPath: /health
@@ -34,10 +24,6 @@ services:
         sync: false
       - key: PYTHONUNBUFFERED
         value: "1"
-      - key: PYTHONPATH
-        value: "/opt/render/project/src"
-      - key: HF_HOME
-        value: "/tmp/model_cache"
       - key: RENDER_SERVICE_TYPE
         value: "web"
 
@@ -47,21 +33,8 @@ services:
     runtime: python3
     buildCommand: |
       pip install --upgrade pip &&
-      pip install -r requirements.txt &&
-      mkdir -p model_cache/huggingface
-    startCommand: python -c "
-    import os
-    from livekit.agents import cli, WorkerOptions
-    from agent import entrypoint, prewarm
-    
-    # Run only the LiveKit worker
-    cli.run_app(WorkerOptions(
-        entrypoint_fnc=entrypoint,
-        prewarm_fnc=prewarm,
-        ws_timeout=30.0,
-        agent_name='voice-interviewer'
-    ))
-    "
+      pip install -r requirements.txt
+    startCommand: python agent.py start
     plan: starter
     envVars:
       - key: LIVEKIT_URL
@@ -78,7 +51,3 @@ services:
         sync: false
       - key: PYTHONUNBUFFERED
         value: "1"
-      - key: PYTHONPATH
-        value: "/opt/render/project/src"
-      - key: HF_HOME
-        value: "/tmp/model_cache"

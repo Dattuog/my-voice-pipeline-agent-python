@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 import asyncio
+import sys
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
  
@@ -176,7 +177,7 @@ def root():
     })
 
 def run_livekit_worker():
-    """Run the LiveKit worker in a separate thread"""
+    """Run the LiveKit worker"""
     global worker_instance
     
     try:
@@ -186,11 +187,11 @@ def run_livekit_worker():
         worker_options = WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm,
-            # Add timeout and retry settings
             ws_timeout=30.0,
             agent_name="voice-interviewer",
         )
         
+        worker_instance = True
         # Run the worker
         cli.run_app(worker_options)
         
@@ -202,7 +203,7 @@ def run_flask():
     """Run Flask server"""
     port = int(os.environ.get("PORT", 8000))
     logger.info(f"Starting Flask server on port {port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
  
 if __name__ == "__main__":
     # Validate required environment variables
@@ -216,9 +217,13 @@ if __name__ == "__main__":
     
     print("✅ All required environment variables are set")
     
-    # For web service deployment, only run Flask
-    # The LiveKit worker should be deployed separately
-    if os.environ.get("RENDER_SERVICE_TYPE") == "web" or os.environ.get("PORT"):
+    # Handle command line arguments
+    if len(sys.argv) > 1 and sys.argv[1] == "start":
+        # LiveKit worker mode
+        print("🤖 Starting LiveKit Worker...")
+        run_livekit_worker()
+    elif os.environ.get("RENDER_SERVICE_TYPE") == "web" or os.environ.get("PORT"):
+        # Web service mode (Flask only)
         print("🌐 Running in web service mode - Flask only")
         run_flask()
     else:
@@ -231,6 +236,5 @@ if __name__ == "__main__":
         
         print(f"🌐 Flask server started on port {os.environ.get('PORT', 8000)}")
         
-        # Start LiveKit worker
-        worker_instance = True
+        # Start LiveKit worker in main thread
         run_livekit_worker()
