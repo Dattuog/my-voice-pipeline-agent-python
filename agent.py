@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import asyncio
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
  
@@ -15,6 +16,9 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
  
 load_dotenv(dotenv_path=".env.local")
 logger = logging.getLogger("voice-agent")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
  
 # Flask app
 app = Flask(__name__)
@@ -25,6 +29,9 @@ dynamic_context = {
     "technical_questions": [],
     "behavioral_questions": []
 }
+
+# Global worker instance
+worker_instance = None
  
 @app.route("/inject-context", methods=["POST"])
 def inject_context():
@@ -93,36 +100,45 @@ class Assistant(Agent):
         )
  
 def prewarm(proc: JobProcess):
-    proc.userdata["vad"] = silero.VAD.load()
+    try:
+        proc.userdata["vad"] = silero.VAD.load()
+        logger.info("VAD model loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load VAD model: {e}")
+        # Continue without VAD if it fails
+        proc.userdata["vad"] = None
  
 async def entrypoint(ctx: JobContext):
     logger.info(f"connecting to room {ctx.room.name}")
-    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
- 
-    participant = await ctx.wait_for_participant()
-    logger.info(f"starting voice assistant for participant {participant.identity}")
- 
-    usage_collector = metrics.UsageCollector()
- 
-    def on_metrics_collected(agent_metrics: metrics.AgentMetrics):
-        metrics.log_metrics(agent_metrics)
-        usage_collector.collect(agent_metrics)
- 
-    session = AgentSession(
-        vad=ctx.proc.userdata["vad"],
-        min_endpointing_delay=0.5,
-        max_endpointing_delay=5.0,
-    )
- 
-    session.on("metrics_collected", on_metrics_collected)
     
-    # Create LLM with current context
-    llm, instructions = create_llm_with_context()
-    
-    # Create assistant with fresh LLM instance
-    assistant = Assistant(instructions, llm)
- 
     try:
+        await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+        participant = await ctx.wait_for_participant()
+        logger.info(f"starting voice assistant for participant {participant.identity}")
+ 
+        usage_collector = metrics.UsageCollector()
+ 
+        def on_metrics_collected(agent_metrics: metrics.AgentMetrics):
+            metrics.log_metrics(agent_metrics)
+            usage_collector.collect(agent_metrics)
+ 
+        # Get VAD from userdata, use None if not available
+        vad = ctx.proc.userdata.get("vad")
+        
+        session = AgentSession(
+            vad=vad,
+            min_endpointing_delay=0.5,
+            max_endpointing_delay=5.0,
+        )
+ 
+        session.on("metrics_collected", on_metrics_collected)
+        
+        # Create LLM with current context
+        llm, instructions = create_llm_with_context()
+        
+        # Create assistant with fresh LLM instance
+        assistant = Assistant(instructions, llm)
+ 
         await session.start(
             room=ctx.room,
             agent=assistant,
@@ -130,6 +146,10 @@ async def entrypoint(ctx: JobContext):
                 noise_cancellation=noise_cancellation.BVC(),
             ),
         )
+        
+    except Exception as e:
+        logger.error(f"Error in entrypoint: {e}")
+        raise
     finally:
         # Ensure proper cleanup
         if hasattr(llm, 'close'):
@@ -138,10 +158,50 @@ async def entrypoint(ctx: JobContext):
  
 @app.route("/health", methods=["GET"])
 def health_check():
-    return jsonify({"status": "healthy", "service": "livekit-agent"}), 200
+    return jsonify({
+        "status": "healthy", 
+        "service": "livekit-agent",
+        "worker_running": worker_instance is not None
+    }), 200
+
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({
+        "service": "LiveKit Voice Agent",
+        "status": "running",
+        "endpoints": {
+            "health": "/health",
+            "inject_context": "/inject-context"
+        }
+    })
+
+def run_livekit_worker():
+    """Run the LiveKit worker in a separate thread"""
+    global worker_instance
+    
+    try:
+        logger.info("Starting LiveKit worker...")
+        
+        # Create worker options
+        worker_options = WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            prewarm_fnc=prewarm,
+            # Add timeout and retry settings
+            ws_timeout=30.0,
+            agent_name="voice-interviewer",
+        )
+        
+        # Run the worker
+        cli.run_app(worker_options)
+        
+    except Exception as e:
+        logger.error(f"LiveKit worker failed: {e}")
+        worker_instance = None
 
 def run_flask():
+    """Run Flask server"""
     port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Starting Flask server on port {port}")
     app.run(host="0.0.0.0", port=port, debug=False)
  
 if __name__ == "__main__":
@@ -155,22 +215,22 @@ if __name__ == "__main__":
         exit(1)
     
     print("✅ All required environment variables are set")
-    print(f"🚀 Starting LiveKit Agent with Flask server...")
     
-    # Start Flask server in background
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
-    print(f"🌐 Flask server started on port {os.environ.get('PORT', 8000)}")
-    
-    try:
-        cli.run_app(
-            WorkerOptions(
-                entrypoint_fnc=entrypoint,
-                prewarm_fnc=prewarm,
-            )
-        )
-    except Exception as e:
-        logger.error(f"Failed to start LiveKit agent: {e}")
-        print(f"❌ Failed to start LiveKit agent: {e}")
-        exit(1)
+    # For web service deployment, only run Flask
+    # The LiveKit worker should be deployed separately
+    if os.environ.get("RENDER_SERVICE_TYPE") == "web" or os.environ.get("PORT"):
+        print("🌐 Running in web service mode - Flask only")
+        run_flask()
+    else:
+        # Local development - run both
+        print(f"🚀 Starting LiveKit Agent with Flask server...")
+        
+        # Start Flask server in background
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        
+        print(f"🌐 Flask server started on port {os.environ.get('PORT', 8000)}")
+        
+        # Start LiveKit worker
+        worker_instance = True
+        run_livekit_worker()
