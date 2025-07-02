@@ -42,47 +42,52 @@ def inject_context():
  
     return jsonify({"status": "ok", "message": "Raw context injected"})
  
+
+def create_llm_with_context():
+    """Create LLM with current dynamic context"""
+    gemini_api_key = os.environ.get("GEMINI_API_KEY")
+    base_instruction = (
+        "You are a professional voice interviewer helping the user screen candidates for roles. "
+        "Keep your tone engaging and business-focused. Only ask one question at a time. "
+        "If follow-up questions are given, ask them one by one based on the candidate's previous response."
+    )
  
+    question_lines = []
+ 
+    topic = dynamic_context.get("topic")
+    tech_qs = dynamic_context.get("technical_questions", [])
+    beh_qs = dynamic_context.get("behavioral_questions", [])
+ 
+    if topic:
+        question_lines.append(f"The topic for this interview is: **{topic}**")
+    if tech_qs:
+        question_lines.append("Start with the following technical questions:")
+        for i, q in enumerate(tech_qs, 1):
+            question_lines.append(f"{i}. {q['question']}")
+            for fq in q.get("follow_ups", []):
+                question_lines.append(f"   → Follow-up: {fq}")
+    if beh_qs:
+        question_lines.append("\nThen move to these behavioral questions:")
+        for i, q in enumerate(beh_qs, 1):
+            question_lines.append(f"{i}. {q['question']}")
+            for fq in q.get("follow_ups", []):
+                question_lines.append(f"   → Follow-up: {fq}")
+ 
+    final_instruction = base_instruction + "\n\n" + "\n".join(question_lines)
+    
+    return google.LLM(
+        model="gemini-2.0-flash-exp",
+        temperature=0.8,
+        api_key=gemini_api_key,
+    ), final_instruction
+
+
 class Assistant(Agent):
-    def __init__(self):
-        gemini_api_key = os.environ.get("GEMINI_API_KEY")
-        base_instruction = (
-            "You are a professional voice interviewer helping the user screen candidates for roles. "
-            "Keep your tone engaging and business-focused. Only ask one question at a time. "
-            "If follow-up questions are given, ask them one by one based on the candidate's previous response."
-        )
- 
-        question_lines = []
- 
-        topic = dynamic_context.get("topic")
-        tech_qs = dynamic_context.get("technical_questions", [])
-        beh_qs = dynamic_context.get("behavioral_questions", [])
- 
-        if topic:
-            question_lines.append(f"The topic for this interview is: **{topic}**")
-        if tech_qs:
-            question_lines.append("Start with the following technical questions:")
-            for i, q in enumerate(tech_qs, 1):
-                question_lines.append(f"{i}. {q['question']}")
-                for fq in q.get("follow_ups", []):
-                    question_lines.append(f"   → Follow-up: {fq}")
-        if beh_qs:
-            question_lines.append("\nThen move to these behavioral questions:")
-            for i, q in enumerate(beh_qs, 1):
-                question_lines.append(f"{i}. {q['question']}")
-                for fq in q.get("follow_ups", []):
-                    question_lines.append(f"   → Follow-up: {fq}")
- 
-        final_instruction = base_instruction + "\n\n" + "\n".join(question_lines)
- 
+    def __init__(self, instructions: str, llm):
         super().__init__(
-            instructions=final_instruction,
+            instructions=instructions,
             stt=deepgram.STT(),
-            llm=google.LLM(
-                model="gemini-2.0-flash-exp",
-                temperature=0.8,
-                api_key=gemini_api_key,
-            ),
+            llm=llm,
             tts=cartesia.TTS(),
             turn_detection=MultilingualModel(),
         )
@@ -110,14 +115,26 @@ async def entrypoint(ctx: JobContext):
     )
  
     session.on("metrics_collected", on_metrics_collected)
+    
+    # Create LLM with current context
+    llm, instructions = create_llm_with_context()
+    
+    # Create assistant with fresh LLM instance
+    assistant = Assistant(instructions, llm)
  
-    await session.start(
-        room=ctx.room,
-        agent=Assistant(),
-        room_input_options=RoomInputOptions(
-            noise_cancellation=noise_cancellation.BVC(),
-        ),
-    )
+    try:
+        await session.start(
+            room=ctx.room,
+            agent=assistant,
+            room_input_options=RoomInputOptions(
+                noise_cancellation=noise_cancellation.BVC(),
+            ),
+        )
+    finally:
+        # Ensure proper cleanup
+        if hasattr(llm, 'close'):
+            await llm.close()
+        logger.info("Session ended and resources cleaned up")
  
 def run_flask():
     app.run(host="0.0.0.0", port=8000)
@@ -131,5 +148,3 @@ if __name__ == "__main__":
             prewarm_fnc=prewarm,
         )
     )
- 
- 
