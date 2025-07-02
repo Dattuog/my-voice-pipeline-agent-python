@@ -12,7 +12,7 @@ from livekit.agents import (
 from livekit.plugins import cartesia, google, deepgram, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
  
-# Load environment
+ 
 load_dotenv(dotenv_path=".env.local")
 logger = logging.getLogger("voice-agent")
  

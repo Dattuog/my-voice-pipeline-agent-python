@@ -3,7 +3,6 @@ livekit-plugins-openai~=1.0
 livekit-plugins-cartesia~=1.0
 livekit-plugins-deepgram~=1.0
 livekit-plugins-silero~=1.0
-
 # optional, only when using LiveKit's turn detection model
 livekit-plugins-turn-detector~=1.0
 # optional, only if background voice & noise cancellation is needed
@@ -11,3 +10,4 @@ livekit-plugins-noise-cancellation>=0.2.0,<1.0.0
 python-dotenv~=1.0
 torch>=2.0.0  # Required for turn-detector
 livekit-plugins-google>=0.1.0
+flask~=2.3.0
