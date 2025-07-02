@@ -136,15 +136,41 @@ async def entrypoint(ctx: JobContext):
             await llm.close()
         logger.info("Session ended and resources cleaned up")
  
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "healthy", "service": "livekit-agent"}), 200
+
 def run_flask():
-    app.run(host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port, debug=False)
  
 if __name__ == "__main__":
-    threading.Thread(target=run_flask, daemon=True).start()
- 
-    cli.run_app(
-        WorkerOptions(
-            entrypoint_fnc=entrypoint,
-            prewarm_fnc=prewarm,
+    # Validate required environment variables
+    required_env_vars = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "GEMINI_API_KEY"]
+    missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
+    
+    if missing_vars:
+        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+        print(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
+        exit(1)
+    
+    print("✅ All required environment variables are set")
+    print(f"🚀 Starting LiveKit Agent with Flask server...")
+    
+    # Start Flask server in background
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    print(f"🌐 Flask server started on port {os.environ.get('PORT', 8000)}")
+    
+    try:
+        cli.run_app(
+            WorkerOptions(
+                entrypoint_fnc=entrypoint,
+                prewarm_fnc=prewarm,
+            )
         )
-    )
+    except Exception as e:
+        logger.error(f"Failed to start LiveKit agent: {e}")
+        print(f"❌ Failed to start LiveKit agent: {e}")
+        exit(1)

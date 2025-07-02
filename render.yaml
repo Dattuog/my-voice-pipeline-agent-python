@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: livekit-agent
+    runtime: python3
+    buildCommand: |
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      mkdir -p model_cache/huggingface &&
+      python -c "
+      import sys
+      try:
+          from livekit.agents import cli
+          print('LiveKit agents installed successfully')
+      except Exception as e:
+          print(f'Error importing LiveKit: {e}')
+          sys.exit(1)
+      "
+    startCommand: python agent.py start
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CARTESIA_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONPATH
+        value: "/opt/render/project/src"
