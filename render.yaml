@@ -1,14 +1,11 @@
 services:
-  # Web service for API endpoints
   - type: web
     name: livekit-agent-api
     runtime: python3
-    buildCommand: |
-      pip install --upgrade pip &&
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: python agent.py
-    plan: starter
     healthCheckPath: /health
+    plan: starter
     envVars:
       - key: LIVEKIT_URL
         sync: false
@@ -26,28 +23,4 @@ services:
         value: "1"
       - key: RENDER_SERVICE_TYPE
         value: "web"
-
-  # Background service for LiveKit worker
-  - type: background
-    name: livekit-agent-worker
-    runtime: python3
-    buildCommand: |
-      pip install --upgrade pip &&
-      pip install -r requirements.txt
-    startCommand: python agent.py start
-    plan: starter
-    envVars:
-      - key: LIVEKIT_URL
-        sync: false
-      - key: LIVEKIT_API_KEY
-        sync: false
-      - key: LIVEKIT_API_SECRET
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: CARTESIA_API_KEY
-        sync: false
-      - key: DEEPGRAM_API_KEY
-        sync: false
-      - key: PYTHONUNBUFFERED
-        value: "1"
+      # PORT is automatically set by Render - DO NOT set it manually
