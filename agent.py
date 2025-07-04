@@ -16,7 +16,6 @@ from livekit.agents import (
 )
 from livekit.plugins import (
     cartesia,
-    openai,
     deepgram,
     noise_cancellation,
     silero,
