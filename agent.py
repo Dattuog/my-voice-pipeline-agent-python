@@ -38,7 +38,10 @@ class Assistant(Agent):
             "You were created as a demo to showcase the capabilities of LiveKit's agents framework.",
             stt=deepgram.STT(),
             llm=google.LLM( model="gemini-2.0-flash-exp",temperature=0.8,),
-            tts=cartesia.TTS(),
+           tts=cartesia.TTS(
+                model="sonic-2",
+                voice="91b4cf29-5166-44eb-8054-30d40ecc8081",
+            ),
             # use LiveKit's transformer-based turn detector
             # turn_detection=MultilingualModel(),
         )
