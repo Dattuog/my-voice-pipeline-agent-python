@@ -12,3 +12,5 @@ flask~=2.3.0
 aiohttp>=3.8.0
 httpx>=0.24.0
 gunicorn>=20.1.0
+fastapi~=0.95
+uvicorn~=0.22.0

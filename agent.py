@@ -1,8 +1,6 @@
 import logging
 
 import os
-
-import json
  
 from dotenv import load_dotenv
 
@@ -93,45 +91,17 @@ async def entrypoint(ctx: JobContext):
 
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
  
-    # Parse raw metadata sent as stringified JSON
+    # Receive raw context as a string directly from n8n HTTP node
 
-    try:
-
-        metadata_raw = ctx.job.metadata or ""
-
-        metadata = json.loads(metadata_raw)
-
-    except json.JSONDecodeError as e:
-
-        logger.error(f"Failed to parse metadata: {e}")
-
-        metadata = {}
+    raw_context = ctx.job.metadata or ""
  
-    topic = metadata.get("topic", "")
-
-    technical_questions = metadata.get("technical_questions", [])
-
-    behavioral_questions = metadata.get("behavioral_questions", [])
- 
-    # Create context
+    # Inject entire string as a single assistant message (do NOT parse/split)
 
     initial_ctx = ChatContext()
 
-    if topic:
+    if raw_context.strip():
 
-        initial_ctx.add_message(role="assistant", content=f"The interview is for: {topic}")
-
-    for q in technical_questions:
-
-        if "question" in q:
-
-            initial_ctx.add_message(role="user", content=f"Technical Question: {q['question']}")
-
-    for q in behavioral_questions:
-
-        if "question" in q:
-
-            initial_ctx.add_message(role="user", content=f"Behavioral Question: {q['question']}")
+        initial_ctx.add_message(role="assistant", content=raw_context)
  
     participant = await ctx.wait_for_participant()
 
