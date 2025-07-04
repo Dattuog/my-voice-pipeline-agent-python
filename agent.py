@@ -1,4 +1,5 @@
 import logging
+import os
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -21,8 +22,10 @@ from livekit.plugins import (
 )
 # from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.plugins import google
-
 load_dotenv(dotenv_path=".env.local")
+logger = logging.getLogger("voice-agent")
+
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 logger = logging.getLogger("voice-agent")
 
 
@@ -37,7 +40,7 @@ class Assistant(Agent):
             "You should use short and concise responses, and avoiding usage of unpronouncable punctuation. "
             "You were created as a demo to showcase the capabilities of LiveKit's agents framework.",
             stt=deepgram.STT(),
-            llm=google.LLM( model="gemini-2.0-flash-exp",temperature=0.8,),
+            llm = google.LLM(api_key= GOOGLE_API_KEY, model="gemini-2.0-flash-exp", temperature=0.8),
             tts=cartesia.TTS(),
             # use LiveKit's transformer-based turn detector
             
