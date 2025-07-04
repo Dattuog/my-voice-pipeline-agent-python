@@ -19,7 +19,7 @@ from livekit.plugins import (
     noise_cancellation,
     silero,
 )
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+# from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.plugins import google
 
 load_dotenv(dotenv_path=".env.local")
@@ -40,7 +40,7 @@ class Assistant(Agent):
             llm=google.LLM( model="gemini-2.0-flash-exp",temperature=0.8,),
             tts=cartesia.TTS(),
             # use LiveKit's transformer-based turn detector
-            turn_detection=MultilingualModel(),
+            # turn_detection=MultilingualModel(),
         )
 
     async def on_enter(self):
