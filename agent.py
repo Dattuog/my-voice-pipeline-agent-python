@@ -21,11 +21,32 @@ from livekit.plugins import (
     silero,
     google,
 )
+from audio_analysis_client import AudioAnalysisClient
  
 load_dotenv(dotenv_path=".env.local")
 logger = logging.getLogger("voice-agent")
  
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+# Model fallback options (in order of preference)
+FALLBACK_MODELS = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro", 
+    "gemini-pro"
+]
+
+def get_llm_with_fallback():
+    """Create LLM with fallback model support"""
+    model_to_use = GEMINI_MODEL
+    
+    # If using the experimental model that hit quota, fall back
+    if "2.0-flash-exp" in model_to_use:
+        logger.warning(f"Model {model_to_use} may have quota issues, using fallback")
+        model_to_use = FALLBACK_MODELS[0]
+    
+    logger.info(f"Using Gemini model: {model_to_use}")
+    return google.LLM(api_key=GOOGLE_API_KEY, model=model_to_use, temperature=0.8)
  
  
 class Assistant(Agent):
@@ -35,14 +56,14 @@ class Assistant(Agent):
             instructions=(
                 "You are a professional interview agent conducting spoken interviews for a specific role. "
                 "The interview topic, background, and questions are provided in your initial context. "
-                "Begin the conversation as soon as the participant joins, and guide the interview smoothly. "
+                "Begin the conversation as soon as the participant joins and ask them to turn on their video, and guide the interview smoothly. "
                 "Ask one question at a time, listen carefully, and keep your responses short and clear. "
                 "Speak naturally and avoid using complex or unpronounceable punctuation. "
                 "If the context contains both technical and behavioral questions, balance them appropriately. "
-                "Do not repeat the context; use it to guide your dialogue."
+                "Do not repeat the context; use it to guide your dialogue. If participant told to end the don't abruptly end the call , instead ask the reason for ending the call and if he mentions I cannot continue, then politely end the call or else continue the interview. "
             ),
             stt=deepgram.STT(),
-            llm=google.LLM(api_key=GOOGLE_API_KEY, model="gemini-2.0-flash-exp", temperature=0.8),
+            llm=get_llm_with_fallback(),
             tts=cartesia.TTS(),
         )
  
@@ -80,6 +101,34 @@ async def entrypoint(ctx: JobContext):
     # Wait for participant
     participant = await ctx.wait_for_participant()
     logger.info(f"Starting session for participant {participant.identity}")
+
+    # Initialize audio analysis client
+    audio_client = AudioAnalysisClient()
+    analysis_session_id = None
+    
+    # Start audio analysis for the participant
+    try:
+        # Check if audio analysis server is available
+        health_check = await audio_client.health_check()
+        if health_check.get("status") == "healthy":
+            logger.info("Audio analysis server is healthy")
+            
+            # Start audio analysis session
+            analysis_result = await audio_client.start_audio_analysis(
+                room_name=ctx.room.name,
+                participant_identity=participant.identity
+            )
+            
+            if analysis_result.get("success"):
+                analysis_session_id = analysis_result.get("session_id")
+                logger.info(f"Audio analysis session started: {analysis_session_id}")
+            else:
+                logger.warning(f"Failed to start audio analysis: {analysis_result.get('error')}")
+        else:
+            logger.warning("Audio analysis server is not available - continuing without audio analysis")
+            
+    except Exception as e:
+        logger.error(f"Error setting up audio analysis: {str(e)} - continuing without audio analysis")
  
     # Set up metrics
     usage_collector = metrics.UsageCollector()
@@ -110,6 +159,23 @@ async def entrypoint(ctx: JobContext):
         instructions="Greet the participant warmly and start the interview with the first question based on your context. Be conversational and professional.",
         allow_interruptions=True
     )
+    
+    # Cleanup function for when session ends
+    async def cleanup():
+        if analysis_session_id:
+            try:
+                await audio_client.stop_audio_analysis(analysis_session_id)
+                logger.info("Audio analysis session stopped successfully")
+            except Exception as e:
+                logger.error(f"Error stopping audio analysis: {str(e)}")
+        await audio_client.__aexit__(None, None, None)
+    
+    # Register cleanup handler
+    try:
+        # Wait for session to complete
+        await session.wait_for_disconnection()
+    finally:
+        await cleanup()
  
  
 if __name__ == "__main__":
