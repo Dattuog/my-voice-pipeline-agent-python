@@ -22,9 +22,9 @@ app = FastAPI()
 # Add CORS middleware for NextJS frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Your NextJS app URL
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],  # More permissive for development
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -130,10 +130,19 @@ audio_analyzer = AudioAnalyzer()
 @app.post("/start-audio-analysis")
 async def start_audio_analysis(request: dict):
     """Start audio analysis for a participant"""
-    room_name = request.get("room_name")
-    participant_identity = request.get("participant_identity", "unknown")
-    
     try:
+        logger.info(f"Received start analysis request: {request}")
+        
+        room_name = request.get("room_name")
+        participant_identity = request.get("participant_identity", "unknown")
+        
+        if not room_name:
+            logger.error("Missing room_name in request")
+            return {
+                "success": False,
+                "error": "room_name is required"
+            }
+        
         session_id = f"{room_name}_{participant_identity}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         # Store session info
@@ -262,6 +271,23 @@ async def get_session_info(session_id: str):
         return {"session": active_sessions[session_id]}
     else:
         return {"error": "Session not found"}
+
+@app.get("/")
+async def root():
+    """Root endpoint for testing connectivity"""
+    return {
+        "service": "Voice Pipeline Audio Analysis Server",
+        "status": "running",
+        "version": "1.0.0",
+        "timestamp": datetime.now().isoformat(),
+        "endpoints": {
+            "health": "/health",
+            "start_analysis": "/start-audio-analysis",
+            "stop_analysis": "/stop-audio-analysis",
+            "active_sessions": "/active-sessions",
+            "websocket": "/ws/audio-stream/{session_id}"
+        }
+    }
 
 @app.get("/health")
 async def health_check():

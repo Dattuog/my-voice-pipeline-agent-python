@@ -185,7 +185,16 @@ def advanced_emotion_detection(self, audio_array):
    - Verify participant has audio track
    - Check server logs for errors
 
-3. **Performance Issues**
+3. **Frontend Integration Issues**
+   - **"Failed to start recording: undefined"** error:
+     - Check if server is running: `netstat -ano | findstr :8000`
+     - Verify API endpoint: `http://localhost:8000/start-audio-analysis`
+     - Check request payload includes `room_name` field
+     - See `FRONTEND_INTEGRATION_GUIDE.md` for detailed examples
+   - **CORS Issues**: Server is configured for `localhost:3000`
+   - **Network Errors**: Check browser console and network tab
+
+4. **Performance Issues**
    - Adjust analysis frequency in the audio analyzer
    - Consider using background processing for heavy ML models
    - Monitor CPU usage during analysis

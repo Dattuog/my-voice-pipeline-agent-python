@@ -5,6 +5,7 @@ import numpy as np
 from livekit import api
 from livekit.api import LiveKitAPI
 from livekit.protocol import egress as egress_proto
+from livekit.protocol.egress import TrackEgressRequest, DirectFileOutput
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -20,6 +21,16 @@ load_dotenv(dotenv_path=".env.local")
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize LiveKit API
+livekit_api = LiveKitAPI(
+    url=os.getenv("LIVEKIT_URL", "wss://voice-pipeline-agent-python.livekit.cloud"),
+    api_key=os.getenv("LIVEKIT_API_KEY"),
+    api_secret=os.getenv("LIVEKIT_API_SECRET")
+)
+
+# Create egress client
+egress_client = livekit_api.egress
 
 app = FastAPI()
 
@@ -279,4 +290,4 @@ async def start_file_recording(request: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)  # Changed to port 8001

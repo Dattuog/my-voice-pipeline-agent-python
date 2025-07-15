@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Analysis API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+        pre { background: #e9ecef; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Audio Analysis API Test</h1>
+        
+        <div>
+            <button onclick="testHealthCheck()">Test Health Check</button>
+            <button onclick="testStartRecording()">Test Start Recording</button>
+            <button onclick="testStopRecording()">Test Stop Recording</button>
+            <button onclick="testActiveSessions()">Test Active Sessions</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentSessionId = null;
+
+        function addResult(title, data, isError = false) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${isError ? 'error' : 'success'}`;
+            resultDiv.innerHTML = `
+                <h3>${title}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            resultsDiv.insertBefore(resultDiv, resultsDiv.firstChild);
+        }
+
+        async function testHealthCheck() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                addResult('Health Check', data);
+            } catch (error) {
+                addResult('Health Check Error', { error: error.message }, true);
+            }
+        }
+
+        async function testStartRecording() {
+            try {
+                const payload = {
+                    room_name: 'frontend-test-room',
+                    participant_identity: 'frontend-test-user'
+                };
+                
+                const response = await fetch(`${API_BASE}/start-audio-analysis`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSessionId = data.session_id;
+                }
+                
+                addResult('Start Recording', data);
+            } catch (error) {
+                addResult('Start Recording Error', { error: error.message }, true);
+            }
+        }
+
+        async function testStopRecording() {
+            if (!currentSessionId) {
+                addResult('Stop Recording Error', { error: 'No active session. Start recording first.' }, true);
+                return;
+            }
+
+            try {
+                const payload = {
+                    session_id: currentSessionId
+                };
+                
+                const response = await fetch(`${API_BASE}/stop-audio-analysis`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSessionId = null;
+                }
+                
+                addResult('Stop Recording', data);
+            } catch (error) {
+                addResult('Stop Recording Error', { error: error.message }, true);
+            }
+        }
+
+        async function testActiveSessions() {
+            try {
+                const response = await fetch(`${API_BASE}/active-sessions`);
+                const data = await response.json();
+                addResult('Active Sessions', data);
+            } catch (error) {
+                addResult('Active Sessions Error', { error: error.message }, true);
+            }
+        }
+
+        // Test connectivity on page load
+        window.addEventListener('load', () => {
+            testHealthCheck();
+        });
+    </script>
+</body>
+</html>
